@@ -1,20 +1,28 @@
 import { useEffect, useState } from 'preact/hooks'
 import Peer from 'peerjs'
 import Message from './message'
+import Video from './video'
 import { peerConfig } from '../utils/config'
 
-export default function PeerChat() {
+export default function PeerVideo() {
     const [peer, setPeer] = useState(null)
     const [connection, setConnection] = useState(null)
+    const [call, setCall] = useState(null)
     const [address, setAddress] = useState('')
     const [recipient, setRecipient] = useState('')
     const [messages, setMessages] = useState([])
     const [message, setMessage] = useState('')
+    const [localStream, setLocalStream] = useState(null)
+    const [remoteStream, setRemoteStream] = useState(null)
 
     useEffect(() => {
         // init peer on component mount
         const pr = new Peer(peerConfig)
         setPeer(pr)
+        // my video stream
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+            setLocalStream(stream)
+        })
         return () => {
             pr.destroy()
         }
@@ -27,21 +35,39 @@ export default function PeerChat() {
             console.log('Peer ID', id)
             setAddress(id)
         })
-        // listen for incoming connections
+        // for text messages
         peer.on('connection', con => {
             console.log('Connection received')
             con.on('open', () => {
                 console.log('Connected')
                 setRecipient(con.peer)
                 setConnection(con)
-                const cn = peer.call(con.peer, localStream)
-                setCall(cn)
             })
-        })        
+        })
+        // for video calls
+        peer.on('call', incomingCall => {
+            setCall(incomingCall)
+            incomingCall.answer(localStream)
+            incomingCall.on('stream', remoteStream => {
+                setRemoteStream(remoteStream)
+            })
+            incomingCall.peerConnection.ontrack = event => {
+                console.log('Track event received on incoming call')
+                const [stream] = event.streams
+                setRemoteStream(stream)
+            }
+        })
     }, [peer])
 
     useEffect(() => {
-        if (!connection) return       
+        if (!connection) return
+        connection.on('open', () => {
+            console.log('Connected')
+            setRecipient(connection.peer)
+            setConnection(connection)
+            const cn = peer.call(connection.peer, localStream)
+            setCall(cn)
+        })
         connection.on('data', function (data) {
             handleData(data)
         })
@@ -52,6 +78,24 @@ export default function PeerChat() {
             console.error('Connection error:', err)
         })
     }, [connection])
+
+    useEffect(() => {
+        if (!call) return
+        call.on('stream', remoteStream => {
+            setRemoteStream(remoteStream)
+        })
+        call.on('close', () => {
+            disconnect()
+        })
+        call.on('error', err => {
+            console.error('Call error:', err)
+        })
+        call.peerConnection.ontrack = event => {
+            console.log('Track event received on call')
+            const [stream] = event.streams
+            setRemoteStream(stream)
+        }
+    }, [call])
 
     const connectRecipient = e => {
         e.preventDefault()
@@ -68,7 +112,8 @@ export default function PeerChat() {
         console.log('Connection established - sender')
     }
 
-    const disconnect = () => {       
+    const disconnect = () => {
+        if (call) call.close()
         if (connection) {
             connection.close()
             setConnection(null) // sender side
@@ -76,6 +121,7 @@ export default function PeerChat() {
         setRecipient('')
         setMessages([])
         setMessage('')
+        setRemoteStream(null)
     }
 
     const handleData = d => {
@@ -94,7 +140,7 @@ export default function PeerChat() {
 
     return (
         <div>
-            <div class="py-4 text-2xl">Peer-to-peer Text Chat</div>
+            <div class="py-4 text-2xl">Peer-to-peer Video Chat</div>
             {peer && (
                 <>
                     <div class="flex justify-start w-full gap-2 pb-4">
@@ -113,6 +159,12 @@ export default function PeerChat() {
                                 </div>
                             </form>
                         </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-8 py-4 h-auto">
+                        <div class="p-0">
+                            <Video stream={localStream} />
+                        </div>
+                        <div class="p-0">{remoteStream ? <Video stream={remoteStream} /> : <div>recipient is not connected</div>}</div>
                     </div>
                     {connection && (
                         <form onSubmit={handleSend}>

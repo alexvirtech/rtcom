@@ -1,4 +1,5 @@
 import { useState,useEffect } from "preact/hooks"
+import Message from "./message"
 
 export default function Websocket() {
     const [ws, setWs] = useState(null)
@@ -28,12 +29,6 @@ export default function Websocket() {
         ws.send(message)
         setMessages((prevMessages) => [...prevMessages, { me: true, text: message }])
         setMessage("")
-    }
-
-    const Message = ({ text, me }) => {
-        return (
-            <div class={`py-2 border-b border-dashed border-slate-500 ${me ? 'text-left text-slate-500' : 'text-right'}`}>{text}</div>
-        )
     }
 
     return (
