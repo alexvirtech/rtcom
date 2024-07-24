@@ -67,6 +67,30 @@ export default function PeerVideo() {
             setConnection(connection)
             const cn = peer.call(connection.peer, localStream)
             setCall(cn)
+            cn.peerConnection.ontrack = event => {
+                console.log('Track event received on outgoing call')
+                const [stream] = event.streams
+                setRemoteStream(stream)
+            }
+
+            const existingTracks = cn.peerConnection.getSenders().map(sender => sender.track?.kind)
+            console.log('Existing tracks before adding: ', existingTracks)
+
+            localStream.getTracks().forEach(track => {
+                if (!existingTracks.includes(track.kind)) {
+                    console.log(`Adding track: ${track.kind}`)
+                    try {
+                        cn.peerConnection.addTrack(track, localStream)
+                    } catch (error) {
+                        console.error(`Failed to add track: ${track.kind}`, error)
+                    }
+                } else {
+                    console.log(`Track already exists: ${track.kind}`)
+                }
+            })
+
+            const updatedTracks = cn.peerConnection.getSenders().map(sender => sender.track?.kind)
+            console.log('Existing tracks after adding: ', updatedTracks)
         })
         connection.on('data', function (data) {
             handleData(data)
@@ -95,7 +119,20 @@ export default function PeerVideo() {
             const [stream] = event.streams
             setRemoteStream(stream)
         }
-    }, [call])
+
+        // Ensure tracks are added to the call
+        if (localStream) {
+            localStream.getTracks().forEach((track) => {
+                const sender = call.peerConnection.getSenders().find((s) => s.track?.kind === track.kind)
+                if (!sender) {
+                    console.log(`Adding missing track: ${track.kind}`)
+                    call.peerConnection.addTrack(track, localStream)
+                } else {
+                    console.log(`Track already added: ${track.kind}`)
+                }
+            })
+        }
+    }, [call,localStream])
 
     const connectRecipient = e => {
         e.preventDefault()
