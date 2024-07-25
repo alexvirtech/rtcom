@@ -35,7 +35,7 @@ export default function PeerVideo() {
             console.log('Peer ID', id)
             setAddress(id)
         })
-        // for text messages
+        // for text messages - from recipient
         peer.on('connection', con => {
             console.log('Connection received')
             con.on('open', () => {
@@ -44,7 +44,7 @@ export default function PeerVideo() {
                 setConnection(con)
             })
         })
-        // for video calls
+        // for video calls - from recipient
         peer.on('call', incomingCall => {
             setCall(incomingCall)
             incomingCall.answer(localStream)
@@ -65,6 +65,7 @@ export default function PeerVideo() {
             console.log('Connected')
             setRecipient(connection.peer)
             setConnection(connection)
+            // initiate video call
             const cn = peer.call(connection.peer, localStream)
             setCall(cn)
             cn.peerConnection.ontrack = event => {
@@ -144,6 +145,7 @@ export default function PeerVideo() {
     }
 
     const connect = recId => {
+        // open connection to recipient
         const con = peer.connect(recId)
         setConnection(con)
         console.log('Connection established - sender')
